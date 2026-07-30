@@ -26,6 +26,7 @@ require (
 require (
 	github.com/openshift/api v0.0.0-20260715165912-72066cc9718b
 	github.com/openshift/client-go v0.0.0-20260715172546-dac61734e0ec
+	github.com/openshift/controller-runtime-common v0.0.0-20260722095319-fea68df23430
 	github.com/openshift/library-go v0.0.0-20260720185249-0595e37fe20f
 )
 

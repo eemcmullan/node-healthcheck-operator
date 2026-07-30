@@ -24,12 +24,15 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
+	"time"
 
 	// +kubebuilder:scaffold:imports
 	"github.com/go-logr/logr"
 	"go.uber.org/zap/zapcore"
 
 	corev1 "k8s.io/api/core/v1"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
+	"k8s.io/apimachinery/pkg/api/meta"
 	pkgruntime "k8s.io/apimachinery/pkg/runtime"
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
 	"k8s.io/client-go/kubernetes"
@@ -50,6 +53,7 @@ import (
 
 	configv1 "github.com/openshift/api/config/v1"
 	consolev1 "github.com/openshift/api/console/v1"
+	openshifttls "github.com/openshift/controller-runtime-common/pkg/tls"
 	machinev1beta1 "github.com/openshift/api/machine/v1beta1"
 	operatorv1 "github.com/openshift/api/operator/v1"
 
@@ -94,6 +98,8 @@ func init() {
 	// +kubebuilder:scaffold:scheme
 }
 
+// +kubebuilder:rbac:groups=config.openshift.io,resources=apiservers,verbs=get;list;watch
+
 func main() {
 	var metricsAddr string
 	var enableLeaderElection bool
@@ -129,6 +135,38 @@ func main() {
 		setupLog.Info("HTTP/2 for metrics and webhook server enabled")
 	}
 
+	// Create k8s client to fetch TLS profile from API server
+	cfg := ctrl.GetConfigOrDie()
+	setupClient, err := client.New(cfg, client.Options{Scheme: scheme})
+	if err != nil {
+		setupLog.Error(err, "unable to create setup client")
+		os.Exit(1)
+	}
+
+	// Fetch the TLS profile from the APIServer resource
+	isOpenShift := true
+	fetchCtx, fetchCancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer fetchCancel()
+	tlsProfile, err := openshifttls.FetchAPIServerTLSProfile(fetchCtx, setupClient)
+	if err != nil {
+		if meta.IsNoMatchError(err) || apierrors.IsNotFound(err) {
+			setupLog.Info("Not on OpenShift, using default TLS settings")
+			isOpenShift = false
+		} else {
+			setupLog.Error(err, "failed to fetch TLS profile")
+			os.Exit(1)
+		}
+	}
+
+	// Create the TLS configuration function for the server endpoints
+	if isOpenShift {
+		tlsConfig, unsupported := openshifttls.NewTLSConfigFromProfile(tlsProfile)
+		if len(unsupported) > 0 {
+			setupLog.Info("Unsupported TLS ciphers ignored", "ciphers", unsupported)
+		}
+		tlsOpts = append(tlsOpts, tlsConfig)
+	}
+
 	// Build metrics options, conditionally enabling mTLS when TLS cert files
 	// are present (OpenShift service-serving-cert-signer provides them)
 	metricsOpts := server.Options{
@@ -136,7 +174,7 @@ func main() {
 		TLSOpts:     tlsOpts,
 	}
 
-	kubeClient, err := kubernetes.NewForConfig(ctrl.GetConfigOrDie())
+	kubeClient, err := kubernetes.NewForConfig(cfg)
 	if err != nil {
 		setupLog.Error(err, "unable to create kubernetes clientset")
 		os.Exit(1)
@@ -160,7 +198,7 @@ func main() {
 		metricsOpts.FilterProvider = filters.WithAuthenticationAndAuthorization
 	}
 
-	mgr, err := ctrl.NewManager(ctrl.GetConfigOrDie(), ctrl.Options{
+	mgr, err := ctrl.NewManager(cfg, ctrl.Options{
 		Scheme: scheme,
 		Client: client.Options{
 			Cache: &client.CacheOptions{
@@ -178,9 +216,10 @@ func main() {
 		os.Exit(1)
 	}
 
-	ctx := ctrl.SetupSignalHandler()
+	mgrCtx, mgrCtxCancel := context.WithCancel(ctrl.SetupSignalHandler())
+	defer mgrCtxCancel()
 
-	caps, err := cluster.NewCapabilities(mgr.GetConfig(), mgr.GetAPIReader(), setupLog, ctx)
+	caps, err := cluster.NewCapabilities(mgr.GetConfig(), mgr.GetAPIReader(), setupLog, mgrCtx)
 	if err != nil {
 		setupLog.Error(err, "unable to determine cluster capabilities")
 		os.Exit(1)
@@ -247,6 +286,24 @@ func main() {
 		setupLog.Error(err, "unable to create webhook", "webhook", "NodeHealthCheck")
 		os.Exit(1)
 	}
+
+	// Set up the TLS security profile watcher controller.
+	// This will trigger a graceful shutdown when the TLS profile changes
+	if isOpenShift {
+		watcher := &openshifttls.SecurityProfileWatcher{
+			Client:                mgr.GetClient(),
+			InitialTLSProfileSpec: tlsProfile,
+			OnProfileChange: func(_ context.Context, _, _ configv1.TLSProfileSpec) {
+				setupLog.Info("TLS profile changed, restarting")
+				mgrCtxCancel()
+			},
+		}
+		if err := watcher.SetupWithManager(mgr); err != nil {
+			setupLog.Error(err, "unable to set up TLS profile watcher")
+			os.Exit(1)
+		}
+	}
+
 	// +kubebuilder:scaffold:builder
 
 	// Do some initialization
@@ -280,7 +337,7 @@ func main() {
 	}
 
 	setupLog.Info("starting manager")
-	if err := mgr.Start(ctx); err != nil {
+	if err := mgr.Start(mgrCtx); err != nil {
 		setupLog.Error(err, "problem running manager")
 		os.Exit(1)
 	}
