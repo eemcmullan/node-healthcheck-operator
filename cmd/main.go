@@ -53,9 +53,9 @@ import (
 
 	configv1 "github.com/openshift/api/config/v1"
 	consolev1 "github.com/openshift/api/console/v1"
-	openshifttls "github.com/openshift/controller-runtime-common/pkg/tls"
 	machinev1beta1 "github.com/openshift/api/machine/v1beta1"
 	operatorv1 "github.com/openshift/api/operator/v1"
+	openshifttls "github.com/openshift/controller-runtime-common/pkg/tls"
 
 	remediationv1alpha1 "github.com/medik8s/node-healthcheck-operator/api/v1alpha1"
 	controller "github.com/medik8s/node-healthcheck-operator/internal/controller"
