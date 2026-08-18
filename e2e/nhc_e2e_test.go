@@ -289,6 +289,15 @@ var _ = Describe("e2e - NHC", Label("NHC"), func() {
 						g.Expect(nhc.Status.Phase).To(Equal(v1alpha1.PhaseRemediating))
 					}, "10s", "500ms").Should(Succeed())
 
+					By("ensuring DetectedUnhealthy event was emitted")
+					Eventually(func(g Gomega) {
+						events, err := clientSet.CoreV1().Events("default").List(context.Background(), metav1.ListOptions{
+							FieldSelector: fmt.Sprintf("involvedObject.name=%s,involvedObject.kind=NodeHealthCheck,reason=DetectedUnhealthy", nhcName),
+						})
+						g.Expect(err).ToNot(HaveOccurred())
+						g.Expect(events.Items).ToNot(BeEmpty(), "expected DetectedUnhealthy event for NHC in default namespace")
+					}, "30s", "1s").Should(Succeed())
+
 					// let's do some NHC validation tests here
 					By("ensuring negative maxUnhealthy update fails")
 					nhc = getNodeHealthCheck()
