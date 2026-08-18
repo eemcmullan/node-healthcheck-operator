@@ -12,6 +12,8 @@ aliases:
       - jmontleon
       - abrugaro
       - eemcmullan
+      - JonahSussman
+      - pranavgaikwad
 
   code-reviewers:
       - slintes
@@ -24,6 +26,8 @@ aliases:
       - jmontleon
       - abrugaro
       - eemcmullan
+      - JonahSussman
+      - pranavgaikwad
 
   emeritus_approvers:
       - n1r1
