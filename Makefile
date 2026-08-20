@@ -495,6 +495,10 @@ add_channel_entry_for_the_bundle:
 		echo "entries:" >> ${CATALOG_INDEX}; \
 		echo "  - name: ${OPERATOR_NAME}.v${VERSION}" >> ${CATALOG_INDEX}; \
 		if [ -n "${PREVIOUS_VERSION}" ] && [ "${VERSION}" != "${DEFAULT_VERSION}" ] && [ "${PREVIOUS_VERSION}" != "${DEFAULT_VERSION}" ]; then \
+			if ! printf '%s\n' "${PREVIOUS_VERSION}" "${VERSION}" | sort -V -C 2>/dev/null; then \
+				echo "Error: VERSION (${VERSION}) must be greater than PREVIOUS_VERSION (${PREVIOUS_VERSION})"; \
+				exit 1; \
+			fi; \
 			echo "    replaces: ${OPERATOR_NAME}.v${PREVIOUS_VERSION}" >> ${CATALOG_INDEX}; \
 		fi; \
 		if [ -n "${SKIP_RANGE_LOWER}" ] && [ "${VERSION}" != "${DEFAULT_VERSION}" ] && [ "${VERSION}" != "${SKIP_RANGE_LOWER}" ]; then \
