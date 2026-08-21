@@ -24,10 +24,10 @@ require (
 )
 
 require (
-	github.com/openshift/api v0.0.0-20260715165912-72066cc9718b
-	github.com/openshift/client-go v0.0.0-20260715172546-dac61734e0ec
-	github.com/openshift/controller-runtime-common v0.0.0-20260722095319-fea68df23430
-	github.com/openshift/library-go v0.0.0-20260720185249-0595e37fe20f
+	github.com/openshift/api v0.0.0-20260805215214-cfb63858e9d7
+	github.com/openshift/client-go v0.0.0-20260806041845-b74fb348f1e7
+	github.com/openshift/controller-runtime-common v0.0.0-20260813135806-e1187ec555fc
+	github.com/openshift/library-go v0.0.0-20260807194649-ee0a87843dda
 )
 
 require (
