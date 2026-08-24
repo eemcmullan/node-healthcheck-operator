@@ -25,7 +25,6 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
-	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/util/errors"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -53,8 +52,7 @@ const (
 var nodehealthchecklog = logf.Log.WithName("nodehealthcheck-resource")
 
 func SetupWebhookWithManager(mgr ctrl.Manager, caps *cluster.Capabilities) error {
-	return ctrl.NewWebhookManagedBy(mgr).
-		For(&remediationv1alpha1.NodeHealthCheck{}).
+	return ctrl.NewWebhookManagedBy(mgr, &remediationv1alpha1.NodeHealthCheck{}).
 		WithValidator(&customValidator{mgr.GetClient(), caps}).
 		Complete()
 }
@@ -67,15 +65,13 @@ type customValidator struct {
 }
 
 // ValidateCreate implements webhook.Validator so a webhook will be registered for the type
-func (v *customValidator) ValidateCreate(ctx context.Context, obj runtime.Object) (warnings admission.Warnings, err error) {
-	nhc := obj.(*remediationv1alpha1.NodeHealthCheck)
+func (v *customValidator) ValidateCreate(ctx context.Context, nhc *remediationv1alpha1.NodeHealthCheck) (warnings admission.Warnings, err error) {
 	nodehealthchecklog.Info("validate create", "name", nhc.Name)
 	return admission.Warnings{}, v.validate(ctx, nhc)
 }
 
 // ValidateUpdate implements webhook.Validator so a webhook will be registered for the type
-func (v *customValidator) ValidateUpdate(ctx context.Context, old runtime.Object, new runtime.Object) (warnings admission.Warnings, err error) {
-	nhc := new.(*remediationv1alpha1.NodeHealthCheck)
+func (v *customValidator) ValidateUpdate(ctx context.Context, oldNhc, nhc *remediationv1alpha1.NodeHealthCheck) (warnings admission.Warnings, err error) {
 	nodehealthchecklog.Info("validate update", "name", nhc.Name)
 
 	// do the normal validation
@@ -85,7 +81,7 @@ func (v *customValidator) ValidateUpdate(ctx context.Context, old runtime.Object
 
 	// during ongoing remediations, some updates are forbidden
 	if isRemediating(nhc) {
-		if updated, field := isRestrictedFieldUpdated(nhc, old.(*remediationv1alpha1.NodeHealthCheck)); updated {
+		if updated, field := isRestrictedFieldUpdated(nhc, oldNhc); updated {
 			return admission.Warnings{}, fmt.Errorf("%s update %s", field, OngoingRemediationError)
 		}
 	}
@@ -93,8 +89,7 @@ func (v *customValidator) ValidateUpdate(ctx context.Context, old runtime.Object
 }
 
 // ValidateDelete implements webhook.Validator so a webhook will be registered for the type
-func (v *customValidator) ValidateDelete(_ context.Context, obj runtime.Object) (warnings admission.Warnings, err error) {
-	nhc := obj.(*remediationv1alpha1.NodeHealthCheck)
+func (v *customValidator) ValidateDelete(_ context.Context, nhc *remediationv1alpha1.NodeHealthCheck) (warnings admission.Warnings, err error) {
 	nodehealthchecklog.Info("validate delete", "name", nhc.Name)
 	if isRemediating(nhc) {
 		return admission.Warnings{}, fmt.Errorf("deletion %s", OngoingRemediationError)

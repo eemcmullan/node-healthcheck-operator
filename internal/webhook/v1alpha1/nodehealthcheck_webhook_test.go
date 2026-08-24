@@ -11,7 +11,6 @@ import (
 	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
-	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/util/intstr"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/webhook/admission"
@@ -337,7 +336,7 @@ var _ = Describe("remediationv1alpha1.NodeHealthCheck Validation", func() {
 				},
 			}
 		})
-		validateError := func(validate func(ctx context.Context, old runtime.Object, new runtime.Object) (warnings admission.Warnings, err error), old, new *remediationv1alpha1.NodeHealthCheck, substrings ...string) {
+		validateError := func(validate func(ctx context.Context, old, new *remediationv1alpha1.NodeHealthCheck) (warnings admission.Warnings, err error), old, new *remediationv1alpha1.NodeHealthCheck, substrings ...string) {
 			warnings, err := validate(context.Background(), old, new)
 			ExpectWithOffset(1, warnings).To(BeEmpty())
 			matchers := make([]types.GomegaMatcher, 0)
